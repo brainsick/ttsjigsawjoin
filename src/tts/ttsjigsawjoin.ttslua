@@ -993,20 +993,39 @@ function getPiece(object)
   --))
 
   local piece = pieceCache[object]
-  if piece == nil then
-    piece = {
-      id = getPieceId(object),
-      object = object,
-      solutionPosition = nil
-    }
-    if piece.id ~= nil then
-      piece.solutionPosition = Vector(templateData[gameState.templateId].pieces[piece.id].solutionPosition)
-      piece.solutionRotation = Vector(templateData[gameState.templateId].pieces[piece.id].solutionRotation) + Vector(0, 180, 0)
-      pieceCache[piece.id] = piece
+  if piece == nil or piece.object == nil then
+    if type(object) == "number" then
+      local pieceId = object
+      for i, o in pairs(getObjects()) do
+        if getPieceId(o) == pieceId then
+          piece = {
+            id = pieceId,
+            object = o,
+            solutionPosition = nil
+          }
+          if piece.id ~= nil then
+            piece.solutionPosition = Vector(templateData[gameState.templateId].pieces[piece.id].solutionPosition)
+            piece.solutionRotation = Vector(templateData[gameState.templateId].pieces[piece.id].solutionRotation) + Vector(0, 180, 0)
+            pieceCache[piece.id] = piece
+          end
+          pieceCache[o] = piece
+        end
+      end
+    else
+      piece = {
+        id = getPieceId(object),
+        object = object,
+        solutionPosition = nil
+      }
+      if piece.id ~= nil then
+        piece.solutionPosition = Vector(templateData[gameState.templateId].pieces[piece.id].solutionPosition)
+        piece.solutionRotation = Vector(templateData[gameState.templateId].pieces[piece.id].solutionRotation) + Vector(0, 180, 0)
+        pieceCache[piece.id] = piece
+      end
+      pieceCache[object] = piece
     end
-    pieceCache[object] = piece
   end
-  if piece.id == nil then return end
+  if piece == nil or piece.id == nil then return end
   return piece
 end
 
