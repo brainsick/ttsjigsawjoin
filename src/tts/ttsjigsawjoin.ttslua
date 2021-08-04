@@ -947,7 +947,7 @@ end
 function getPieceId(object)
   if object == nil then return end
   if gameState.templateId == nil then return end
-  if object.tag == nil or object.tag ~= 'Generic' then return end
+  if type(object) ~= "userdata" or object.tag == nil or object.tag ~= 'Generic' then return end
 
   local customObject = object.getCustomObject()
   if customObject then
