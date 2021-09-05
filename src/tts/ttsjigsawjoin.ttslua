@@ -151,6 +151,33 @@ function serializeGameStateJSON()
   return result
 end
 
+function printTable(t,return_as_string,table_id_list)
+	local s
+	return_as_string = return_as_string == true -- default is false
+	if table_id_list == nil then -- used if table has been seen before. don't display it again
+		table_id_list = {}
+	end
+	if type(t) == "nil" or type(t) == "boolean" then
+		s = string.upper(tostring(t))
+	elseif type(t) == "number" or type(t) == "function" then
+		s = tostring(t)
+	elseif type(t) == "table" and table_id_list[t] == nil then
+    table_id_list[t] = true
+    local strings_list = {}
+    for i, v in pairs(t) do
+      table.insert(strings_list,tostring(i)..":"..printTable(v,true,table_id_list))
+    end
+    s = "{"..table.concat(strings_list,",").."}"
+	else
+		s = '"'..tostring(t)..'"'
+	end
+	if return_as_string then
+		return s
+	else
+		return print(""..string.gsub(s,"%[([0-9A-Fa-f][0-9A-Fa-f]+)%]","[#%1]"))
+	end
+end
+
 function onObjectRandomize(object, player_color)
   if not gameState.enabled then return end
 
@@ -950,7 +977,56 @@ end
 
 
 function onClick_RecoverDeletedPieces(player, button, id)
-  if gameState.templateId == nil or gameState.guidCatalog == nil or next(gameState.guidCatalog) == nil or not player.admin then return end
+  local start = os.time()
+  local start_inter
+
+  local numSpawnedPieces = 0
+  local numDeletedPieces = 0
+  local numFixedInfo = 0
+
+  if gameState.templateId == nil or not player.admin then return end
+
+  -- If pictureUrl is not set, get it from one of the pieces
+  if gameState.pictureUrl == nil then
+    for _, piece in pairs(getAllPieces()) do
+      if piece.object.getCustomObject().diffuse then
+        gameState.pictureUrl = piece.object.getCustomObject().diffuse
+        break
+      end
+    end
+  end
+
+  -- If guidCatalog doesn't exist, then create it from the current pieces
+  if gameState.guidCatalog == nil or next(gameState.guidCatalog) == nil then
+    start_inter = os.time()
+    gameState.guidCatalog = {}
+    for _, piece in pairs(getAllPieces()) do
+      local obj = piece.object
+      local pieceId = piece.id
+      gameState.guidCatalog[pieceId] = obj.guid
+      if next(obj.getAttachments()) then
+        local droppedAttachments = obj.removeAttachments()
+        for _, attachment in ipairs(droppedAttachments) do
+          pieceId = getPieceId(attachment)
+          if not gameState.guidCatalog[pieceId] then
+            gameState.guidCatalog[pieceId] = attachment.guid
+          end
+          obj.addAttachment(attachment)
+        end
+      end
+    end
+    for i = 1, #templateData[gameState.templateId].pieces do
+      if not gameState.guidCatalog[i] then
+        gameState.guidCatalog[i] = ""
+      end
+    end
+    if gameState.debug_level >= 2 then
+      debugPrint(string.format(
+        'RecoverDeletedPieces-guidCatalog elapsed: %.2f',
+        os.time() - start_inter
+      ))
+    end
+  end
 
   -- Make a reverse lookup table of all valid piece GUIDs
   local allValidPieceGUIDs = {}
@@ -958,7 +1034,7 @@ function onClick_RecoverDeletedPieces(player, button, id)
     allValidPieceGUIDs[guid] = pieceId
   end
 
-
+  start_inter = os.time()
   -- Find all piece GUIDs on the table
   -- Also delete any invalid GUID pieces
   local allPieceGUIDs = {}
@@ -966,6 +1042,7 @@ function onClick_RecoverDeletedPieces(player, button, id)
     local allAttachments = piece.object.getAttachments()
     if allValidPieceGUIDs[piece.object.guid] == nil and #allAttachments < 10 then
       piece.object.destruct()
+      numDeletedPieces = numDeletedPieces + 1 + #allAttachments
     else
       allPieceGUIDs[piece.object.guid] = true
       if allValidPieceGUIDs[piece.object.guid] == nil then
@@ -982,6 +1059,7 @@ function onClick_RecoverDeletedPieces(player, button, id)
         allPieceGUIDs[attachment.guid] = true
         if not allValidPieceGUIDs[attachment.guid] then
           piece.object.destroyAttachment(attachment.index)
+          numDeletedPieces = numDeletedPieces + 1
         end
       end
     end
@@ -1002,21 +1080,40 @@ function onClick_RecoverDeletedPieces(player, button, id)
         diffuse = gameState.pictureUrl,
         material = 3
       })
+      numSpawnedPieces = numSpawnedPieces + 1
     end
   end
-  
+
+  if gameState.debug_level >= 2 then
+    debugPrint(string.format(
+      'RecoverDeletedPieces-recreatePieces elapsed: %.2f',
+      os.time() - start_inter
+    ))
+  end
+
+  start_inter = os.time()
   -- Rebuild parentId and joinedTo
   for _, piece in pairs(getAllPieces()) do
     local allAttachments = piece.object.getAttachments()
     if #allAttachments > 0 then
       -- Loop through all attachments and assign correct values
       gameState.pieces[piece.id].parentId = piece.id
+      if not gameState.pieces[piece.id].player_name then
+        gameState.pieces[piece.id].player_name = ""
+      end
       local lastPieceId = piece.id
       for _, attachment in pairs(allAttachments) do
         local pieceId = allValidPieceGUIDs[attachment.guid]
         if pieceId ~= nil then
+          if gameState.pieces[pieceId].joinedTo == nil or gameState.pieces[pieceId].parentId == nil or gameState.pieces[pieceId].player_name == nil then
+            numFixedInfo = numFixedInfo + 1
+          end
           gameState.pieces[lastPieceId].joinedTo = pieceId
           gameState.pieces[pieceId].joinedTo = piece.id
+          gameState.pieces[pieceId].parentId = piece.id
+          if not gameState.pieces[pieceId].player_name then
+            gameState.pieces[pieceId].player_name = ""
+          end
           lastPieceId = pieceId
         else
           -- We should never reach here, but it is not entirely out of the question
@@ -1026,11 +1123,32 @@ function onClick_RecoverDeletedPieces(player, button, id)
       gameState.pieces[lastPieceId].joinedTo = piece.id
     else
       -- Piece has no attachments
+      if gameState.pieces[piece.id].joinedTo ~= nil or gameState.pieces[piece.id].parentId ~= nil or gameState.pieces[piece.id].player_name ~= nil then
+        numFixedInfo = numFixedInfo + 1
+      end
       gameState.pieces[piece.id].joinedTo = nil
       gameState.pieces[piece.id].parentId = nil
       gameState.pieces[piece.id].player_name = nil
     end
   end
+
+  if gameState.debug_level >= 2 then
+    debugPrint(string.format(
+      'RecoverDeletedPieces-refreshPieceTable elapsed: %.2f',
+      os.time() - start_inter
+    ))
+  end
+
+  if gameState.debug_level >= 2 then
+    debugPrint(string.format(
+      'RecoverDeletedPieces numSpawnedPieces:%d numDeletedPieces:%d numFixedInfo:%d elapsed: %.2f',
+      numSpawnedPieces,
+      numDeletedPieces,
+      numFixedInfo,
+      os.time() - start
+    ))
+  end
+
 end
 
 function updateScoreBoards()
@@ -1388,14 +1506,12 @@ function onPieceDropped(player_color, droppedPiece)
 
   if gameState.debug_level >= 3 then
     debugPrint(string.format(
-      'onPieceDropped player_color: %s, droppedPiece.id: %s, elapsed: %.2f',
+      'onPieceDropped player_color: %s, droppedPiece.id: %s, elapsed: %.2f, droppedPieceGroup:%s, candidateMatches:%s',
       player_color,
       droppedPiece.id,
-      os.time() - start
-      -- #droppedPieceGroup,
-      -- table.concat(droppedPieceGroup, ','),
-      -- #candidateMatches,
-      -- table.concat(candidateMatches, ',')
+      os.time() - start,
+      printTable(droppedPieceGroup,true),
+      printTable(candidateMatches,true)
     ))
   end
 end
