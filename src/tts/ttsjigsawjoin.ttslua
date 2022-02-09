@@ -986,28 +986,49 @@ end
 -- Converts a TTS object type into a Piece type
 -- caches all object lookups but only returns valid pieces
 pieceCache = {}
-function getPiece(object)
+function getPiece(objectOrId)
   --debugPrint(string.format(
   --  'getPiece object: %s',
   --  tostring(object)
   --))
 
-  local piece = pieceCache[object]
+  local piece = pieceCache[objectOrId]
   if piece == nil then
-    piece = {
-      id = getPieceId(object),
-      object = object,
-      solutionPosition = nil
-    }
-    if piece.id ~= nil then
-      piece.solutionPosition = Vector(templateData[gameState.templateId].pieces[piece.id].solutionPosition)
-      piece.solutionRotation = Vector(templateData[gameState.templateId].pieces[piece.id].solutionRotation) + Vector(0, 180, 0)
-      pieceCache[piece.id] = piece
+    if type(objectOrId) == "number" then
+      -- Handle if objectOrId is a pieceId
+      local pieceId = objectOrId
+      for _, o in pairs(getObjects()) do
+        if getPieceId(o) == pieceId then
+          piece = {
+            id = pieceId,
+            object = o,
+            solutionPosition = nil
+          }
+          piece.solutionPosition = Vector(templateData[gameState.templateId].pieces[piece.id].solutionPosition)
+          piece.solutionRotation = Vector(templateData[gameState.templateId].pieces[piece.id].solutionRotation) + Vector(0, 180, 0)
+          pieceCache[piece.id] = piece
+          pieceCache[o] = piece
+        end
+      end
+    else
+      -- Handle if objectOrId is an object
+      local object = objectOrId
+      piece = {
+        id = getPieceId(object),
+        object = object,
+        solutionPosition = nil
+      }
+      if piece.id ~= nil then
+        piece.solutionPosition = Vector(templateData[gameState.templateId].pieces[piece.id].solutionPosition)
+        piece.solutionRotation = Vector(templateData[gameState.templateId].pieces[piece.id].solutionRotation) + Vector(0, 180, 0)
+        pieceCache[piece.id] = piece
+      end
+      pieceCache[object] = piece
     end
-    pieceCache[object] = piece
   end
-  if piece.id == nil then return end
-  return piece
+  if piece != nil and piece.id != nil then
+    return piece
+  end
 end
 
 
