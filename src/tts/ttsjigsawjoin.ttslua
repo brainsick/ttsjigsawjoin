@@ -34,7 +34,7 @@ function onLoad(save_state)
 
   Wait.time(onWaitMain, 1, -1)
 
-  tableSurface = getObjectFromGUID("1f2767")
+  tableSurface = getObjectFromGUID('1f2767')
   tableSurface.interactable = false
 
   debugPrint(string.format(
@@ -148,7 +148,7 @@ end
 
 local lastDrop = {}
 function onObjectDropped(player_color, object)
-  if not gameState.enabled or player_color == "Grey" then return end
+  if not gameState.enabled or player_color == 'Grey' then return end
 
   local start = os.time()
 
@@ -661,7 +661,7 @@ function spawnPuzzle(templateId, picture)
       diffuse = picture,
       material = 3
     })
-	piece.sticky = false
+    piece.sticky = false
   end
 end
 
