@@ -34,6 +34,9 @@ function onLoad(save_state)
 
   Wait.time(onWaitMain, 1, -1)
 
+  tableSurface = getObjectFromGUID('1f2767')
+  tableSurface.interactable = false
+
   debugPrint(string.format(
     'onLoad elapsed: %.2f',
     os.time() - start
@@ -145,7 +148,7 @@ end
 
 lastDrop = {}
 function onObjectDropped(player_color, object)
-  if not gameState.enabled then return end
+  if not gameState.enabled or player_color == 'Grey' then return end
 
   local start = os.time()
 
@@ -580,7 +583,7 @@ function onClick_ContinuePuzzleSelector()
 end
 
 function destroyPuzzle()
-  for index, object in ipairs(getAllObjects()) do
+  for index, object in ipairs(getObjects()) do
     if isBoard(object) or getPiece(object) then
       object.destruct()
     end
@@ -658,6 +661,7 @@ function spawnPuzzle(templateId, picture)
       diffuse = picture,
       material = 3
     })
+    piece.sticky = false
   end
 end
 
@@ -764,7 +768,7 @@ end
 function scanAllObjects()
   local start = os.time()
 
-  local allObjects = getAllObjects()
+  local allObjects = getObjects()
   local tempPiece = nil
   for index, object in ipairs(allObjects) do
     tempPiece = getPiece(object)
@@ -781,7 +785,7 @@ end
 function getAllPieces()
   local start = os.time()
 
-  local allObjects = getAllObjects()
+  local allObjects = getObjects()
   local allPieces = {}
   for index, object in ipairs(allObjects) do
     local piece = getPiece(object)
